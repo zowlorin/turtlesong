@@ -1,4 +1,4 @@
-import json, os
+import json, os, re
 
 CONFIG_PATH = "config.json"
 
@@ -12,6 +12,11 @@ def load_text_file_data(path: str) -> str:
     file.close()
     
     return data
+
+import re
+
+def sanitize_filename(filename: str) -> str:
+    return re.sub(r'[<>:"/\\|?*]', ' ', filename)
 
 def load_config() -> object:
     file_data: str = load_text_file_data(CONFIG_PATH)
@@ -27,7 +32,7 @@ def get_installed_song_names() -> list:
     
     files = os.listdir(folder_path)
     
-    music_names: list = [filename[0:-5] for filename in files]
+    music_names: list = [filename[0:-4] for filename in files]
     
     return music_names
 
@@ -46,7 +51,7 @@ def get_playlist_song_data() -> list:
         if 'entries' not in info:
             return []
 
-        data: list = [{"name":entry["title"], "url":entry["url"]} for entry in info['entries']]
+        data: list = [{"name":sanitize_filename(entry["title"]), "url":entry["url"]} for entry in info['entries']]
         
         print("Accessed playlist from url " + url + ".")
         
@@ -70,12 +75,14 @@ def get_missing_songs(already_installed: list, playlist: list) -> list:
         
     return missing 
 
-def install_song(path: str, url: str) -> None:
+def install_song(path: str, name: str, url: str) -> None:
+    name = sanitize_filename(name)
+    
     ydl_opts = {
         'quiet': True,
         'format': 'bestaudio',
         'extract_audio': True,
-        'outtmpl': (path + '%(title)s.%(ext)s'),
+        'outtmpl': (path + name + '.%(ext)s'),
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'm4a',
@@ -96,13 +103,24 @@ def install_songs(to_install: list):
     
     for song in to_install:
         url: str = song["url"]
+        name: str = song["name"]
         
-        install_song(path, url)
+        install_song(path, name, url)
+        
+def install_missing_songs():
+    already_installed: list = get_installed_song_names()
 
-already_installed: list = get_installed_song_names()
+    playlist: list = get_playlist_song_data()
 
-playlist: list = get_playlist_song_data()
-
-missing: list = get_missing_songs(already_installed, playlist)
-
-install_songs(missing)
+    missing: list = get_missing_songs(already_installed, playlist)
+    
+    if not len(missing):
+        print("Everything up-to-date.")
+        return
+    
+    install_songs(missing)
+    
+    print("Installed all {} missing songs.".format(len(missing)))
+    
+if __name__ == "__main__":
+    install_missing_songs()
