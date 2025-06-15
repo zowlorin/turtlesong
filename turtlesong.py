@@ -1,6 +1,8 @@
 import json, os, re
 
-CONFIG_PATH = "config.json"
+CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
+
+CONFIG_PATH = os.path.join(CURRENT_PATH, "config.json")
 
 from yt_dlp import YoutubeDL
 
@@ -46,14 +48,18 @@ def get_playlist_song_data() -> list:
     }
 
     with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        
-        if 'entries' not in info:
-            return []
+        try:
+            info = ydl.extract_info(url, download=False)
+            
+            if 'entries' not in info:
+                return []
 
-        data: list = [{"name":sanitize_filename(entry["title"]), "url":entry["url"]} for entry in info['entries']]
-        
-        print("Accessed playlist from url " + url + ".")
+            data: list = [{"name":sanitize_filename(entry["title"]), "url":entry["url"]} for entry in info['entries']]
+            
+            print("Accessed playlist from url " + url)
+            
+        except:
+            print("Error while accessing playlist from url " + url + "?")
         
         return data
     
@@ -90,22 +96,29 @@ def install_song(path: str, name: str, url: str) -> None:
     }
 
     with YoutubeDL(ydl_opts) as ydl:
-        code: int = ydl.download([url])
+        try:
+            code: int = ydl.download([url])
         
-        if (code == 0):
-            print("Installed song from url " + url + ".")
-            return
-        
-    print("Failed to download song from url " + url + "?")
+            if (code == 1):
+                print("Failed to download song from url " + url + "?")
+                
+                return
+            
+        except:
+            print("Error while downloading song from url " + url + "?")
+                    
+    
 
 def install_songs(to_install: list):
     path: str = config["MUSIC_PATH"]
     
-    for song in to_install:
+    for i, song in enumerate(to_install):
         url: str = song["url"]
         name: str = song["name"]
         
         install_song(path, name, url)
+        
+        print("Installed song " + name + ' ({index}/{length})'.format(index = (i + 1), length = (len(to_install))))
         
 def install_missing_songs():
     already_installed: list = get_installed_song_names()
@@ -114,13 +127,23 @@ def install_missing_songs():
 
     missing: list = get_missing_songs(already_installed, playlist)
     
+    if (len(missing) > 1):
+        print("Found {} missing songs".format(len(missing)))
+        
+    else:
+        print("Found 1 missing song")
+        
     if not len(missing):
-        print("Everything up-to-date.")
+        print("Everything up-to-date")
         return
     
     install_songs(missing)
     
-    print("Installed all {} missing songs.".format(len(missing)))
+    if (len(missing) > 1):
+        print("Installed all {} missing songs".format(len(missing)))
+        
+    else:
+        print("Installed 1 missing song")
     
 if __name__ == "__main__":
     install_missing_songs()
